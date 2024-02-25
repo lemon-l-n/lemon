@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Three.js 二维图形和三维模型演示</title>
+	<meta charset="utf-8">
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			overflow: hidden;
+		}
+		canvas {
+			display: block;
+		}
+		.info {
+			position: fixed;
+			top: 10px;
+			left: 10px;
+			width: 200px;
+			height: auto;
+			padding: 10px;
+			background-color: #fff;
+			border: 1px solid #000;
+			box-shadow: 0 0 10px rgba(0,0,0,0.3);
+			z-index: 100;
+			text-align: left;
+			opacity: 0;
+			transition: opacity 0.5s ease-out;
+		}
+        .info.show {
+			opacity: 1;
+		}
+	</style>
+</head>
+<body>
+    
+	<div class="info"></div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.1/build/three.module.js",
+                "OrbitControls": "https://unpkg.com/three@0.160.1/examples/jsm/controls/OrbitControls.js",
+                "FontLoader": "https://unpkg.com/three@0.160.1/examples/jsm/loaders/FontLoader.js",
+                "TextGeometry": "https://unpkg.com/three@0.160.1/examples/jsm/geometries/TextGeometry.js"
+            }
+        }
+    </script>
+
+	<script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from "OrbitControls"
+		import { FontLoader } from 'FontLoader';
+        import { TextGeometry } from 'TextGeometry';
+        
+		// 初始化场景、相机、渲染器
+		const scene = new THREE.Scene();
+		const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+		camera.position.set(0, 0, 20);
+		const renderer = new THREE.WebGLRenderer();
+		renderer.setSize(window.innerWidth, window.innerHeight);
+		document.body.appendChild(renderer.domElement);
+
+		// 添加物体
+        function createShape(type, size, color, position) {
+            let geometry
+            if (type === 'torus') {
+                geometry = new THREE.TorusGeometry(size.x / 2, size.y / 4, 16, 100);
+            } else if (type === 'sphere') {
+                geometry = new THREE.SphereGeometry(size.x, size.y, size.z);
+            } else {
+                geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+            }
+            const boxMaterial = new THREE.MeshBasicMaterial ({ color: color });
+            const boxMesh = new THREE.Mesh(geometry, boxMaterial);
+            const { x, y, z } = position
+            boxMesh.position.set(x, y, z);
+            scene.add(boxMesh);
+            return boxMesh
+        }
+
+        const boxMesh1 = createShape('box', {x:2,y:2,z:2}, 0xff0000, {x:-5,y:0,z:0} )
+        const boxMesh2 = createShape('box', {x:2,y:2,z:2}, 0xFF69B4, {x:0,y:0,z:0} )
+        const boxMesh3 = createShape('box', {x:2,y:2,z:2}, 0x8A2BE2, {x:5,y:0,z:0} )
+        const boxMesh4 = createShape('box', {x:2,y:2,z:2}, 0xFFFF00, {x:-5,y:5,z:0} )
+        const boxMesh5 = createShape('torus', {x:2,y:2,z:2}, 0x00ff00, {x:0,y:5,z:0} )
+        const boxMesh6 = createShape('sphere', {x:2,y:2,z:2}, 0x0000ff, {x:5,y:5,z:0} )
+
+		// 添加交互控制器
+		const controls = new OrbitControls(camera, renderer.domElement);
+		controls.enabled = false;
+
+        // 设置二维拖拽
+        let isDragging = false; // 是否正在拖拽
+        let currentObject = null; // 当前拖拽的物体
+        let offset = new THREE.Vector3(); // 鼠标点击位置与物体位置的偏移量
+
+        // 监听鼠标按下事件
+        function mousedown(event) {
+            if (event.button !== 0) return; // 只响应左键
+            const x = event.clientX / window.innerWidth * 2 - 1;
+            const y = -(event.clientY / window.innerHeight) * 2 + 1;
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+            if (intersects.length > 0 && intersects[0].object instanceof THREE.Mesh) {
+                isDragging = true;
+                currentObject = intersects[0].object;
+                offset.copy(currentObject.position).sub(intersects[0].point); // 计算偏移量
+                controls.enabled = false;
+            }
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        window.addEventListener('mousedown', mousedown);
+
+        // 监听鼠标移动事件
+        function mousemove(event) {
+            if (!isDragging) return;
+            const x = event.clientX / window.innerWidth * 2 - 1;
+            const y = -(event.clientY / window.innerHeight) * 2 + 1;
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+            if (intersects.length > 0) {
+                const position = new THREE.Vector3().copy(intersects[0].point).add(offset); // 根据偏移量更新位置
+                currentObject.position.copy(position);
+                renderer.render(scene, camera);
+                controls.enabled = false;
+            }
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        window.addEventListener('mousemove', mousemove);
+
+        // 监听鼠标松开事件
+        function mouseup(event) {
+            if (!isDragging) return;
+            isDragging = false;
+            currentObject = null;
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        window.addEventListener('mouseup', mouseup);
+
+		// 点击事件处理函数
+		const handleClick = (event) => {
+			// 获取鼠标位置
+			const x = event.clientX / window.innerWidth * 2 - 1;
+			const y = -(event.clientY / window.innerHeight) * 2 + 1;
+			// 发射射线
+			const raycaster = new THREE.Raycaster();
+			raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+			const intersects = raycaster.intersectObjects([boxMesh1, boxMesh2, boxMesh3, boxMesh4, boxMesh5, boxMesh6]);
+			if (intersects.length > 0) {
+				// 点击到物体，显示信息和模型
+				const object = intersects[0].object;
+				showInfo(object);
+				showModel(object);
+				// 隐藏其他物体
+				hideOtherObjects(object);
+				// 调整相机位置
+				camera.position.set(0, 5, 10);
+				camera.lookAt(object.position);
+				controls.enabled = true;
+			}
+            window.removeEventListener('mousemove', mousemove);
+            window.removeEventListener('mousedown', mousedown);
+            window.removeEventListener('mouseup', mouseup);
+		};
+
+		// 显示信息
+		const showInfo = (object) => {
+			const infoElement = document.querySelector('.info');
+			infoElement.innerHTML = `
+				<p>位置：(${object.position.x.toFixed(2)}, ${object.position.y.toFixed(2)}, ${object.position.z.toFixed(2)})</p>
+			`;
+			infoElement.classList.add('show');
+		};
+        const showModel = (object) => {
+            const geometry = object.geometry;
+            const size = new THREE.Vector3();
+            geometry.computeBoundingBox();
+            geometry.boundingBox.getSize(size);
+            const width = size.x.toFixed(2);
+            const height = size.y.toFixed(2);
+            const depth = size.z.toFixed(2);
+            
+            const modelInfo = `
+                <p>模型尺寸：宽度 ${width}，高度 ${height}，深度 ${depth}</p>
+            `;
+            
+            const infoElement = document.querySelector('.info');
+            infoElement.innerHTML += modelInfo;
+            
+            const modelGeometry = new THREE.BoxGeometry(width, height, depth);
+            const modelMaterial = new THREE.MeshBasicMaterial ({ color: 0xffffff, wireframe: true });
+            const modelMesh = new THREE.Mesh(modelGeometry, modelMaterial);
+            modelMesh.position.copy(object.position);
+            scene.add(modelMesh);
+            // 添加标注
+            addLabel(modelMesh,width, height, depth)
+            object.userData.model = modelMesh;
+        };
+
+		// 添加标注
+		const addLabel = (modelMesh,width, height, depth) => {
+            const loader = new FontLoader();
+            const ttzUrl = 'https://cdn.jsdelivr.net/npm/three@0.132.2/examples/fonts/helvetiker_regular.typeface.json'
+            const fontLoader = new FontLoader();
+            fontLoader.load(ttzUrl, (font) => {
+                const textGeo1 = new TextGeometry( `${width}`, {
+                    font: font,
+                    size: 0.2,
+                    height: 0.1
+                });
+                const textMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                const textMesh1 = new THREE.Mesh( textGeo1, textMaterial );
+                textMesh1.position.copy( modelMesh.position );
+                textMesh1.position.x -= width / 2;
+                textMesh1.position.y += height / 2 + 0.5;
+                scene.add( textMesh1 );
+
+                const textGeo2 = new TextGeometry( `${height}`, {
+                    font: font,
+                    size: 0.2,
+                    height: 0.1
+                });
+                const textMesh2 = new THREE.Mesh( textGeo2, textMaterial );
+                textMesh2.position.copy( modelMesh.position );
+                textMesh2.position.z += depth / 2 + 0.5;
+                textMesh2.position.y += height / 2;
+                textMesh2.rotateY(Math.PI / 2);
+                scene.add( textMesh2 );
+
+                const textGeo3 = new TextGeometry( `${depth}`, {
+                    font: font,
+                    size: 0.2,
+                    height: 0.1
+                });
+                const textMesh3 = new THREE.Mesh(textGeo3, textMaterial);
+                textMesh3.position.copy(modelMesh.position);
+                textMesh3.position.x += depth / 2 + 0.5;
+                textMesh3.position.y += height / 2;
+                textMesh3.rotateY(Math.PI / 2);
+                scene.add(textMesh3);
+            });
+            renderer.render(scene, camera);
+		};        
+
+		// 隐藏未点击的其他物体
+		const hideOtherObjects = (object) => {
+			scene.children.forEach((child) => {
+				if (child instanceof THREE.Mesh && child !== object) {
+					child.visible = !!object && child === object;
+				}
+			});
+			renderer.render(scene, camera);
+		};
+
+		// 添加事件监听器
+		window.addEventListener('dblclick', handleClick);
+
+		// 渲染循环
+		function animate () {
+			requestAnimationFrame(animate);
+			renderer.render(scene, camera);
+		};
+		animate();
+	</script>
+</body>
+</html>
